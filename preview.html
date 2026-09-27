@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Investigation Agent - Setup & Validation Notes</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --card: #121a2b;
+    --card2: #0f1728;
+    --text: #e8eefc;
+    --muted: #aab7d4;
+    --accent: #63b3ed;
+    --green: #68d391;
+    --yellow: #f6c85f;
+    --red: #fc8181;
+    --border: #263552;
+    --code: #090e19;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: linear-gradient(135deg, #080d18, #101a2e);
+    color: var(--text);
+    font-family: Inter, Segoe UI, Arial, sans-serif;
+    line-height: 1.65;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px 70px; }
+  header {
+    padding: 36px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: linear-gradient(145deg, #14213a, #0f1728);
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0 0 10px; font-size: 34px; }
+  h2 { margin-top: 0; font-size: 23px; }
+  h3 { color: var(--accent); margin-bottom: 8px; }
+  p, li { color: var(--muted); }
+  .subtitle { font-size: 17px; margin: 0; }
+  .badge {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: #17304c;
+    color: #9ed7ff;
+    font-size: 13px;
+    margin: 12px 6px 0 0;
+  }
+  section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 26px;
+    margin: 20px 0;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .item {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .success { color: var(--green); font-weight: 700; }
+  .warning { color: var(--yellow); font-weight: 700; }
+  .danger { color: var(--red); font-weight: 700; }
+  code {
+    background: #1a2438;
+    padding: 2px 6px;
+    border-radius: 5px;
+    color: #d7e8ff;
+  }
+  pre {
+    background: var(--code);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 17px;
+    overflow-x: auto;
+    color: #dbe7ff;
+    font-size: 14px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+  th, td { border: 1px solid var(--border); padding: 11px; text-align: left; vertical-align: top; }
+  th { background: #18243a; color: #dbe8ff; }
+  td { color: var(--muted); }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: #111f34;
+    padding: 15px 18px;
+    border-radius: 8px;
+    margin: 15px 0;
+  }
+  footer { text-align: center; color: #71809d; margin-top: 35px; font-size: 13px; }
+  .flow { font-family: monospace; color: #b8d9ff; white-space: pre-wrap; }
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<header>
+  <h1>🤖 Kubernetes Investigation Agent</h1>
+  <p class="subtitle">Google Agents CLI + Antigravity + Gemini + Google Cloud + WSL2 setup and validation notes</p>
+  <span class="badge">DevOps</span>
+  <span class="badge">Kubernetes</span>
+  <span class="badge">SRE</span>
+  <span class="badge">AI Agent</span>
+  <span class="badge">Google Cloud</span>
+  <span class="badge">Antigravity</span>
+  <span class="badge">Gemini</span>
+</header>
+
+<section>
+  <h2>1. Objective</h2>
+  <p>
+    Build and validate a practical AI-powered Kubernetes investigation assistant capable of
+    reading Kubernetes error information, explaining the failure, identifying probable causes,
+    providing supporting evidence, and recommending investigation/remediation steps.
+  </p>
+
+  <div class="callout">
+    <strong>Target:</strong> Move beyond a generic chatbot and build an SRE/Platform Engineering
+    assistant that can correlate Kubernetes events, pod status, logs, resources, scheduling,
+    networking and storage information.
+  </div>
+</section>
+
+<section>
+  <h2>2. Environment Used</h2>
+  <table>
+    <tr><th>Component</th><th>Result / Version</th></tr>
+    <tr><td>Windows</td><td>Windows host running PowerShell</td></tr>
+    <tr><td>WSL</td><td>WSL 2</td></tr>
+    <tr><td>Linux</td><td>Ubuntu 26.04.1 LTS (Resolute Racoon)</td></tr>
+    <tr><td>Python - Windows</td><td>Python 3.13.14</td></tr>
+    <tr><td>Python - WSL</td><td>Python 3.14.4</td></tr>
+    <tr><td>Google Cloud CLI</td><td>Google Cloud SDK 586.0.0</td></tr>
+    <tr><td>Antigravity CLI</td><td>Antigravity CLI 1.2.12</td></tr>
+    <tr><td>AI model</td><td>Gemini 3.8 Flash (High)</td></tr>
+    <tr><td>Project</td><td><code>k8s-investigation-agent</code></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>3. WSL2 Validation</h2>
+  <p>Initially WSL contained Docker Desktop and Ubuntu distributions, both using WSL 2.</p>
+
+<pre>PS C:\Users\test&gt; wsl --list --verbose
+
+NAME              STATE     VERSION
+* docker-desktop  Stopped   2
+  Ubuntu          Stopped   2</pre>
+
+  <p>Ubuntu was launched with:</p>
+
+<pre>wsl -d Ubuntu</pre>
+
+  <p>Operating system verification:</p>
+
+<pre>cat /etc/os-release</pre>
+
+  <p>Result:</p>
+
+<pre>PRETTY_NAME="Ubuntu 26.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="26.04"
+VERSION="26.04.1 LTS (Resolute Racoon)"
+ID=ubuntu</pre>
+
+  <p>Project directory was accessed from WSL through the Windows filesystem:</p>
+
+<pre>cd /mnt/c/Users/test/k8s-investigation-agent</pre>
+
+  <div class="callout">
+    <strong>Important:</strong> <code>/mnt/c/Users/test/...</code> is the WSL representation of
+    <code>C:\Users\test\...</code>.
+  </div>
+</section>
+
+<section>
+  <h2>4. Google Cloud CLI and ADC Setup</h2>
+
+  <p>The Google Cloud CLI was detected inside WSL at:</p>
+
+<pre>/home/dinesh/google-cloud-sdk/bin/gcloud</pre>
+
+  <p>Version verification:</p>
+
+<pre>gcloud --version
+
+Google Cloud SDK 586.0.0</pre>
+
+  <p>The active project was configured:</p>
+
+<pre>gcloud config set project k8s-agent-project-509920</pre>
+
+  <p>
+    Application Default Credentials (ADC) were configured for local development. The credentials
+    were saved under the user's Google Cloud configuration directory.
+  </p>
+
+<pre>~/.config/gcloud/application_default_credentials.json</pre>
+
+  <p>
+    A quota-project warning was encountered during ADC setup. This was treated separately from
+    the active gcloud project configuration.
+  </p>
+
+  <div class="callout">
+    <strong>Concept:</strong> The active gcloud project and the ADC quota project are related
+    but are not exactly the same configuration. For Google APIs, quota/billing attribution may
+    require an explicit quota project.
+  </div>
+</section>
+
+<section>
+  <h2>5. Antigravity CLI Installation</h2>
+
+  <p>
+    Antigravity CLI was initially not available through the existing PowerShell PATH.
+    The installer was then executed using PowerShell.
+  </p>
+
+<pre>irm https://antigravity.google/cli/install.ps1 | iex</pre>
+
+  <p>The installer successfully placed the binary at:</p>
+
+<pre>C:\Users\test\AppData\Local\agy\bin\agy.exe</pre>
+
+  <p>The installer also updated the user PATH registry value, but the existing terminal session
+     needed to be restarted before the PATH change became visible.</p>
+
+  <p>After restarting the terminal:</p>
+
+<pre>agy --version</pre>
+
+  <p>Result:</p>
+
+<pre>Antigravity CLI 1.2.12
+Gemini 3.8 Flash (High)</pre>
+
+  <p>Antigravity was then launched from the project directory:</p>
+
+<pre>cd C:\Users\test\k8s-investigation-agent
+agy</pre>
+
+  <p>
+    Antigravity recognized the workspace as:
+  </p>
+
+<pre>~/k8s-investigation-agent</pre>
+
+  <p>
+    The workspace trust prompt was accepted so the agent could read, edit and execute files
+    inside the project.
+  </p>
+</section>
+
+<section>
+  <h2>6. Google Agents CLI Setup</h2>
+
+  <p>
+    The initial attempt to run <code>uvx google-agents-cli setup</code> failed because
+    <code>uv</code> was not installed.
+  </p>
+
+<pre>uvx google-agents-cli setup
+
+uvx: command not found</pre>
+
+  <p>WSL also initially showed:</p>
+
+<pre>python3 --version
+Python 3.14.4
+
+node --version
+node: command not found
+
+uv --version
+uv: command not found</pre>
+
+  <p>
+    The required environment was subsequently prepared with Python, Node.js and uv, after which
+    Google Agents CLI was successfully built and configured for the project.
+  </p>
+
+  <p>Project path:</p>
+
+<pre>/mnt/c/Users/test/k8s-investigation-agent</pre>
+
+  <div class="callout">
+    <strong>Result:</strong> Google Agents CLI was successfully built and the project could be
+    used from the Antigravity workspace.
+  </div>
+</section>
+
+<section>
+  <h2>7. Project Structure / Workflow</h2>
+
+  <div class="flow">Windows
+  │
+  ├── Antigravity CLI (agy)
+  │       │
+  │       └── k8s-investigation-agent
+  │
+  └── WSL2
+          │
+          ├── Ubuntu
+          ├── Python
+          ├── Node.js
+          ├── uv
+          ├── gcloud
+          └── Google Agents CLI
+                  │
+                  └── Gemini
+                          │
+                          └── Kubernetes Investigation Agent</div>
+</section>
+
+<section>
+  <h2>8. First Functional Test</h2>
+
+  <p>
+    A simple test file named <code>error.txt</code> was created in the project and populated with
+    a Kubernetes-style error message.
+  </p>
+
+<pre>vim error.txt</pre>
+
+  <p>The test error represented an OOM-related Kubernetes event:</p>
+
+<pre>Warning  Failed  kubelet
+Error: container init was OOM-killed (memory limit too low?)</pre>
+
+  <p>
+    The agent was then asked to analyze the contents of <code>error.txt</code>.
+  </p>
+</section>
+
+<section>
+  <h2>9. Agent Analysis Result</h2>
+
+  <p>
+    The agent correctly interpreted the error as an Out Of Memory condition occurring during
+    container initialization/startup.
+  </p>
+
+  <div class="grid">
+    <div class="item">
+      <h3>Warning / Failed</h3>
+      <p>Kubernetes recorded a failure event during the pod lifecycle.</p>
+    </div>
+
+    <div class="item">
+      <h3>kubelet</h3>
+      <p>The node-level Kubernetes agent reported the container failure.</p>
+    </div>
+
+    <div class="item">
+      <h3>OOM-killed</h3>
+      <p>The process was terminated after exceeding its available memory constraint.</p>
+    </div>
+
+    <div class="item">
+      <h3>container init</h3>
+      <p>The failure occurred during container startup/initialization.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>10. Evidence Produced by the Agent</h2>
+
+  <table>
+    <tr><th>Field</th><th>Value</th><th>Interpretation</th></tr>
+    <tr>
+      <td>Reporter</td>
+      <td>kubelet</td>
+      <td>Node-level component monitoring the container.</td>
+    </tr>
+    <tr>
+      <td>Event Type</td>
+      <td>Warning / Failed</td>
+      <td>Indicates a pod/container lifecycle failure.</td>
+    </tr>
+    <tr>
+      <td>Root Mechanism</td>
+      <td>OOM-killed</td>
+      <td>Memory exhaustion / cgroup memory enforcement.</td>
+    </tr>
+    <tr>
+      <td>Failure Point</td>
+      <td>Container initialization</td>
+      <td>Failure occurred during startup.</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>11. Possible Causes Identified</h2>
+
+  <ol>
+    <li><strong>Memory limit too low</strong> — the configured container memory limit may be below
+      the application's startup requirement.</li>
+    <li><strong>Startup memory spike</strong> — initialization work such as migrations, cache
+      creation or library loading can temporarily increase memory consumption.</li>
+    <li><strong>Runtime heap configuration</strong> — Java, Node.js or other runtimes may need
+      explicit heap/resource tuning.</li>
+    <li><strong>Other memory pressure</strong> — node-level pressure, workload changes or memory
+      leaks can also contribute.</li>
+  </ol>
+
+  <div class="callout">
+    <strong>Production improvement:</strong> OOMKilled should be treated as evidence of a memory
+    termination event, not automatic proof that the memory limit itself is incorrectly configured.
+    The agent should collect additional evidence before declaring a root cause.
+  </div>
+</section>
+
+<section>
+  <h2>12. Investigation Commands Recommended</h2>
+
+<pre># Inspect the complete pod definition
+kubectl get pod &lt;pod-name&gt; -o yaml
+
+# Inspect pod events and lifecycle details
+kubectl describe pod &lt;pod-name&gt;
+
+# View recent Kubernetes events
+kubectl get events --sort-by=.lastTimestamp
+
+# Check resource usage
+kubectl top pod &lt;pod-name&gt;
+kubectl top node
+
+# Check previous container termination reason
+kubectl get pod &lt;pod-name&gt; \
+  -o jsonpath='{.status.containerStatuses[*].lastState.terminated.reason}'
+
+# Check previous container exit code
+kubectl get pod &lt;pod-name&gt; \
+  -o jsonpath='{.status.containerStatuses[*].lastState.terminated.exitCode}'</pre>
+</section>
+
+<section>
+  <h2>13. Recommended Remediation Example</h2>
+
+<pre>resources:
+  requests:
+    memory: "256Mi"
+  limits:
+    memory: "512Mi"</pre>
+
+  <p>
+    If the failure is specifically in an <code>initContainer</code>, the resource configuration
+    must be checked under <code>spec.initContainers</code> rather than assuming the normal
+    application container is responsible.
+  </p>
+</section>
+
+<section>
+  <h2>14. Key Learning</h2>
+
+  <ul>
+    <li>WSL2 provides a Linux development environment alongside Windows.</li>
+    <li>Windows and WSL have separate executable environments and PATH configurations.</li>
+    <li>Google Cloud CLI can be installed and authenticated inside WSL.</li>
+    <li>ADC allows local applications and SDKs to authenticate to Google Cloud APIs.</li>
+    <li>Antigravity CLI and Google Agents CLI serve different purposes.</li>
+    <li>The AI agent can inspect a local error file and turn raw Kubernetes errors into structured analysis.</li>
+    <li>A useful SRE agent should distinguish evidence, hypothesis, root cause and remediation.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>15. Next Development Goals</h2>
+
+  <table>
+    <tr><th>Test Case</th><th>Expected Investigation</th></tr>
+    <tr><td>OOMKilled</td><td>Memory limits, usage, node pressure, runtime heap</td></tr>
+    <tr><td>CrashLoopBackOff</td><td>Application crash, previous logs, exit code, probes</td></tr>
+    <tr><td>ImagePullBackOff</td><td>Image name, registry, credentials, network</td></tr>
+    <tr><td>ErrImagePull</td><td>Image availability and registry authentication</td></tr>
+    <tr><td>Pending</td><td>Scheduler, resources, taints, affinity</td></tr>
+    <tr><td>FailedMount</td><td>PV/PVC, StorageClass, mount and CSI issues</td></tr>
+    <tr><td>FailedScheduling</td><td>Node capacity, taints, affinity and constraints</td></tr>
+    <tr><td>Readiness probe failed</td><td>Application health, endpoint, network and timing</td></tr>
+    <tr><td>Liveness probe failed</td><td>Application health and restart behavior</td></tr>
+    <tr><td>CreateContainerConfigError</td><td>ConfigMap, Secret and environment references</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>16. Target Architecture</h2>
+
+  <div class="flow">User / SRE
+     │
+     ▼
+Antigravity
+     │
+     ▼
+Google Agents CLI
+     │
+     ▼
+Kubernetes Investigation Agent
+     │
+     ├── Read error/log/event files
+     ├── Collect kubectl evidence
+     ├── Correlate symptoms
+     ├── Generate root-cause hypotheses
+     ├── Recommend remediation
+     └── Generate verification steps
+     │
+     ▼
+Kubernetes / OpenShift Cluster</div>
+
+  <p>
+    The long-term goal is to evolve this from a static error-file analyzer into an
+    AI-assisted L3/SRE troubleshooting workflow capable of correlating pod status, events,
+    logs, resources, networking, storage and workload configuration.
+  </p>
+</section>
+
+<section>
+  <h2>17. GitHub Repository Notes</h2>
+
+  <p>Suggested repository structure:</p>
+
+<pre>k8s-investigation-agent/
+├── README.md
+├── docs/
+│   └── setup-and-validation.html
+├── error.txt
+├── agents/
+├── tests/
+│   ├── oom-killed.txt
+│   ├── crashloopbackoff.txt
+│   ├── imagepullbackoff.txt
+│   ├── failedmount.txt
+│   └── pending.txt
+└── scripts/</pre>
+
+  <p>
+    Keep credentials, tokens and local authentication files out of Git. In particular, never
+    commit <code>application_default_credentials.json</code>, service-account keys, API keys,
+    access tokens or other secrets.
+  </p>
+</section>
+
+<footer>
+  Kubernetes Investigation Agent — Setup & Validation Notes<br>
+  Built as a DevOps / SRE / AI engineering learning project.
+</footer>
+
+</div>
+</body>
+</html>
